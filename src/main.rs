@@ -48,7 +48,7 @@ fn main() {
    let aspect_ratio = (screen_w as f32) / (screen_h as f32);
    let (mut display, event_loop) = make_display(screen_w, screen_h).unwrap();
 
-   let water_size = 10;
+   let water_size = 100;
    let water_half_size = water_size as f32 / 2.0;
    let water_center = glam::vec3(water_half_size, water_half_size, 0.0);
    let water = render::WaterRenderer::new(&display, (water_size, water_size));
@@ -65,10 +65,10 @@ fn main() {
       if !do_draw { return; }
 
       // state step
-      t += 0.01;
+      t += 0.001;
       camera
          .translate_to(-water_center + water_half_size*glam::vec3(t.sin(), t.cos(), -2.0))
-         .look_at(water_center)
+         // .look_at(water_center)
          ;
       // log::info!("camera {}", camera.get_view().translation);
 

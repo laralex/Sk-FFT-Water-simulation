@@ -1,5 +1,5 @@
 use glium::backend::glutin;
-use glium::{Frame, uniform};
+use glium::{Frame, uniform, PolygonMode};
 use crate::camera::Camera;
 
 pub trait Renderer {
@@ -23,6 +23,9 @@ impl<'a> WaterRenderer<'a> {
              write: true,
              .. Default::default()
          },
+         backface_culling: glium::BackfaceCullingMode::CullClockwise,
+         polygon_mode: PolygonMode::Line,
+         line_width: Some(3.0),
          .. Default::default()
       };
       Self {

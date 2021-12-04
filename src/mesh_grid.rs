@@ -10,17 +10,17 @@ glium::implement_vertex!(Vertex, position);
 pub fn make_tri_mesh(display: &glium::Display, size: (usize, usize)) -> (glium::VertexBuffer<Vertex>, glium::index::NoIndices) {
    let (width, height) = size;
    let mut shape = Vec::<Vertex>::with_capacity (width*height);
-   for row in 0..height-1{
-      let row = row as f32;
-      for col in 0..width {
-         let col = col as f32;
-         shape.push( Vertex { position: [row, col] } );
-         shape.push( Vertex { position: [row + 1.0, col] } );
+  
+   for y in 0..height {
+      let y = y as f32;
+      for x in 0..width+1 {
+         let x = x as f32;
+         shape.push( Vertex { position: [x, y + 1.0] } );
+         shape.push( Vertex { position: [x, y] } );
       }
       // degenerate triangles
-      shape.push( Vertex { position: [row, (width-1) as f32] } );
-      shape.push( Vertex { position: [row, 0.0] } );
-      shape.push( Vertex { position: [row, 0.0] } );
+      shape.push( Vertex { position: [width as f32, y + 1.0] } );
+      shape.push( Vertex { position: [0.0, y + 1.0] } );
    }
    let vbo = glium::VertexBuffer::new(display, &shape).unwrap();
    let indices = glium::index::NoIndices(glium::index::PrimitiveType::TriangleStrip);

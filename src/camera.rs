@@ -29,7 +29,7 @@ impl Camera {
       let forward = (camera_position - look_at.into()).normalize();
       let right = glam::Vec3A::Y.cross(forward);
       let up = forward.cross(right);
-      self.view_matrix.matrix3 = glam::mat3a(right, up, -forward);
+      self.view_matrix.matrix3 = glam::mat3a(right, up, forward).inverse();
       self.is_merged = false;
       self
    }

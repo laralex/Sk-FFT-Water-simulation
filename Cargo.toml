@@ -1,0 +1,12 @@
+[package]
+name = "fft-water"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+glium = "0.30.2"
+glam = "0.20.1"
+log = "0.4"
+simplelog = "0.1"

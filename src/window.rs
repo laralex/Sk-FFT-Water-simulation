@@ -6,9 +6,6 @@ use imgui::{FontConfig, FontSource, Ui};
 use imgui_winit_support::{HiDpiMode};
 use std::path::PathBuf;
 use std::time::Instant;
-
-use crate::demo_state::DemoState;
-
 pub struct Window {
    pub event_loop: glutin::event_loop::EventLoop<()>,
    pub display: glium::Display,
@@ -16,7 +13,6 @@ pub struct Window {
    pub platform: imgui_winit_support::WinitPlatform,
    pub renderer: imgui_glium_renderer::Renderer,
    pub font_size: f32,
-   pub demo_state: crate::demo_state::DemoState
 }
 
 impl Window {
@@ -34,10 +30,8 @@ impl Window {
       let renderer = imgui_glium_renderer::Renderer::init(&mut imgui, &display)
          .expect("Failed to initialize `imgui_glium_renderer::Renderer`");
 
-      let demo_state = DemoState::default();
-
       Self {
-         event_loop, display, imgui, platform, renderer, font_size, demo_state
+         event_loop, display, imgui, platform, renderer, font_size
       }
    }
 
@@ -46,16 +40,14 @@ impl Window {
       width as f32 / height as f32
    }
 
-   pub fn run_loop<UiF, DrawF>(self, mut run_ui: UiF, mut user_render: DrawF)
-    where UiF  : FnMut(&mut bool, &mut Ui, &mut DemoState) + 'static,
-          DrawF: FnMut(&glium::Display, &mut glium::Frame, &mut DemoState) + 'static  {
+   pub fn run_loop<F>(self, mut user_action: F)
+    where F : FnMut(&mut bool, &mut Ui, &glium::Display, &mut glium::Frame) + 'static,  {
       let Window {
           event_loop,
           mut display,
           mut imgui,
           mut platform,
           renderer: mut ui_renderer,
-          mut demo_state,
           ..
       } = self;
       let world_begin_time = Instant::now();
@@ -65,8 +57,6 @@ impl Window {
           Event::NewEvents(_) => {
               let now = Instant::now();
               let delta_time = now - last_frame;
-              demo_state.delta_time_sec = delta_time.as_secs_f32();
-              demo_state.world_time_sec = (now - world_begin_time).as_secs_f32();
               imgui.io_mut().update_delta_time(delta_time);
               last_frame = now;
           }
@@ -80,18 +70,15 @@ impl Window {
           Event::RedrawRequested(_) => {
               let mut ui = imgui.frame();
 
-              let mut run = true;
-              run_ui(&mut run, &mut ui, &mut demo_state);
-              if !run {
-                  *control_flow = ControlFlow::Exit;
-              }
-
               let gl_window = display.gl_window();
               let mut target = display.draw();
               target.clear_color_and_depth((0.05, 0.05, 0.05, 1.0), 1.0);
          
-               // TODO: I don't like passing display here
-              user_render(&display, &mut target, &mut demo_state);
+              let mut run = true;
+              user_action(&mut run, &mut ui, &display, &mut target);
+              if !run {
+                  *control_flow = ControlFlow::Exit;
+              }
 
               // ui render
               platform.prepare_render(&ui, gl_window.window());

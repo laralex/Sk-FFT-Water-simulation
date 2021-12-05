@@ -51,10 +51,10 @@ pub struct WaterRenderer<'a> {
 }
 
 impl<'a> WaterRenderer<'a> {
-   pub fn new(display: &glutin::Display, mesh_grid_size: (u32, u32)) -> Self {
+   pub fn new(display: &glutin::Display, grid_size: (u32, u32), cell_size: f32) -> Self {
       let mesh_grid_program = crate::mesh_grid::make_program(display);
       let (mesh_grid_vertices, mesh_grid_indices)
-         = crate::mesh_grid::make_tri_mesh(display, mesh_grid_size);
+         = crate::mesh_grid::make_tri_mesh(display, grid_size, cell_size);
       let draw_parameters = DrawParametersVariant::new();
       Self {
          mesh_grid_program,
@@ -64,9 +64,9 @@ impl<'a> WaterRenderer<'a> {
       }
    }
 
-   pub fn recreate_mesh_grid(&mut self, display: &glutin::Display, mesh_grid_size: (u32, u32)) {
+   pub fn recreate_mesh_grid(&mut self, display: &glutin::Display, grid_size: (u32, u32), cell_size: f32) {
       let (mesh_grid_vertices, mesh_grid_indices)
-         = crate::mesh_grid::make_tri_mesh(display, mesh_grid_size);
+         = crate::mesh_grid::make_tri_mesh(display, grid_size, cell_size);
       self.mesh_grid_vertices = mesh_grid_vertices;
       self.mesh_grid_indices = mesh_grid_indices;
    }

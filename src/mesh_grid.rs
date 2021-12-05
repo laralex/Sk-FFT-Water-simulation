@@ -10,7 +10,7 @@ glium::implement_vertex!(Vertex, position);
 pub fn make_tri_mesh(display: &glium::Display, size: (usize, usize)) -> (glium::VertexBuffer<Vertex>, glium::index::NoIndices) {
    let (width, height) = size;
    let mut shape = Vec::<Vertex>::with_capacity (width*height);
-  
+
    for y in 0..height {
       let y = y as f32;
       for x in 0..width+1 {
@@ -28,5 +28,5 @@ pub fn make_tri_mesh(display: &glium::Display, size: (usize, usize)) -> (glium::
 }
 
 pub fn make_program(display: &glium::Display) -> glium::Program {
-   crate::program::make_program!(display, "shaders/mesh_grid.vert", "shaders/mesh_grid.frag")
+   crate::shader::make_program!(display, "shaders/mesh_grid.vert", "shaders/mesh_grid.frag")
 }

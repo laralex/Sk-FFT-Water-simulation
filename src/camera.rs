@@ -9,7 +9,7 @@ pub struct Camera {
 
 impl Camera {
    pub fn translate_to(&mut self, camera_position: impl Into<glam::Vec3A>) -> &mut Self {
-      self.view_matrix.translation = camera_position.into();
+      self.view_matrix.translation = -camera_position.into();
       self.is_merged = false;
       self
    }
@@ -19,17 +19,17 @@ impl Camera {
    }
 
    pub fn translate(&mut self, camera_delta_position: impl Into<glam::Vec3A>) -> &mut Self {
-      self.view_matrix.translation += camera_delta_position.into();
+      self.view_matrix.translation -= camera_delta_position.into();
       self.is_merged = false;
       self
    }
 
    pub fn look_at(&mut self, look_at: impl Into<glam::Vec3A>) -> &mut Self {
       let camera_position = self.view_matrix.translation;
-      let forward = (camera_position - look_at.into()).normalize();
+      let forward = (camera_position-look_at.into()).normalize();
       let right = glam::Vec3A::Y.cross(forward);
       let up = forward.cross(right);
-      self.view_matrix.matrix3 = glam::mat3a(right, up, forward).inverse();
+      self.view_matrix.matrix3 = glam::mat3a(right, up, forward).transpose();
       self.is_merged = false;
       self
    }

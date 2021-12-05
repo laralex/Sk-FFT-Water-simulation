@@ -16,7 +16,7 @@ macro_rules! make_program {
          include_str!($vertex_shader_file),
          include_str!($fragment_shader_file),
          None
-      ).unwrap()
+      ).expect("Failed to compile OpenGL program")
    };
 
    // Construct from Vertex, Fragment and Geometry shader files
@@ -30,7 +30,7 @@ macro_rules! make_program {
          include_str!($vertex_shader_file),
          include_str!($fragment_shader_file),
          include_str!($geometry_shader_file)
-      ).unwrap()
+      ).expect("Failed to compile OpenGL program")
    }
 }
 

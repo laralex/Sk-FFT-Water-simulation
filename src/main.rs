@@ -19,12 +19,14 @@ fn init_logger() {
 
 fn main() {
    init_logger();
-   let window = window::Window::new(
+   let mut window = window::Window::new(
       "Final project - FFT water", (1366, 768), None);
 
-   let water_size = 25;
-   let water_center = glam::vec3a(water_size as f32 * 0.5, water_size as f32 * 0.5, 0.0);
-   let mut water = render::WaterRenderer::new(&window.display, (water_size, water_size));
+   window.demo_state.water_size = 25;
+   let center_x = window.demo_state.water_size as f32 * 0.5;
+   let water_center = glam::vec3a(center_x, center_x, 0.0);
+   let mut water = render::WaterRenderer::new(
+      &window.display, (window.demo_state.water_size, window.demo_state.water_size));
    
    let mut camera = camera::Camera::default();
    camera.perspective(
@@ -36,6 +38,7 @@ fn main() {
          .size([500.0, 150.0], imgui::Condition::Always)
          .position([20.0, 20.0], imgui::Condition::Appearing)
          .opened(run)
+         .resizable(false)
          .build(&ui, || {
                let frame_time_sec = ui.io().delta_time;
                ui.text(format!(
@@ -51,11 +54,20 @@ fn main() {
                use render::DrawMode;
                ui.radio_button("Render as mesh", &mut demo_state.draw_mode, DrawMode::Mesh);
                ui.radio_button("Render as wireframe", &mut demo_state.draw_mode, DrawMode::Wireframe);
+               if imgui::Slider::new("Lattice size", u32::MIN, 1000)
+                  .build(ui, &mut demo_state.water_size) {
+                  demo_state.recreate_mesh_grid = true;
+               };
          });
    },
-   move |frame, demo_state| {
+   move |display, frame, demo_state| {
       let t = demo_state.world_time_sec;
-      let orbit_t = (water_size as f32)*glam::vec3a(0.2*t.cos(), 0.2*t.sin(), 1.0);
+      let orbit_t = (demo_state.water_size as f32)*glam::vec3a(0.2*t.cos(), 0.2*t.sin(), 1.0);
+      if demo_state.recreate_mesh_grid {
+         let size = (demo_state.water_size, demo_state.water_size);
+         water.recreate_mesh_grid(display, size);
+         demo_state.recreate_mesh_grid = false;
+      }
       camera
          .translate_to(water_center + orbit_t);
       water.set_draw_mode(demo_state.draw_mode);

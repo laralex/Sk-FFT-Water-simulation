@@ -48,7 +48,7 @@ impl Window {
 
    pub fn run_loop<UiF, DrawF>(self, mut run_ui: UiF, mut user_render: DrawF)
     where UiF  : FnMut(&mut bool, &mut Ui, &mut DemoState) + 'static,
-          DrawF: FnMut(&mut glium::Frame, &DemoState) + 'static  {
+          DrawF: FnMut(&glium::Display, &mut glium::Frame, &mut DemoState) + 'static  {
       let Window {
           event_loop,
           mut display,
@@ -90,7 +90,8 @@ impl Window {
               let mut target = display.draw();
               target.clear_color_and_depth((0.05, 0.05, 0.05, 1.0), 1.0);
          
-              user_render(&mut target, &demo_state);
+               // TODO: I don't like passing display here
+              user_render(&display, &mut target, &mut demo_state);
 
               // ui render
               platform.prepare_render(&ui, gl_window.window());

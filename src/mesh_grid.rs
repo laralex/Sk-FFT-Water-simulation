@@ -7,9 +7,9 @@ pub struct Vertex {
 
 glium::implement_vertex!(Vertex, position);
 
-pub fn make_tri_mesh(display: &glium::Display, size: (usize, usize)) -> (glium::VertexBuffer<Vertex>, glium::index::NoIndices) {
+pub fn make_tri_mesh(display: &glium::Display, size: (u32, u32)) -> (glium::VertexBuffer<Vertex>, glium::index::NoIndices) {
    let (width, height) = size;
-   let mut shape = Vec::<Vertex>::with_capacity (width*height);
+   let mut shape = Vec::<Vertex>::with_capacity ((width*height) as usize);
 
    for y in 0..height {
       let y = y as f32;

@@ -38,7 +38,7 @@ fn main() {
       f32::to_radians(60.0), window.aspect_ratio(),0.01, 100.0)
       .translate(3.0*glam::Vec3A::Z);
 
-   let mut camera_steer_sensitivity = 0.2;
+   let mut camera_steer_sensitivity = 0.1;
    let mut camera_orient_sensitivity = 0.2;
    let mut draw_mode = DrawMode::Wireframe;
 
@@ -73,9 +73,9 @@ fn main() {
 
                ui.text(format!(
                   r#"Usage:
-- Arrows Left/Right: Steer camera to the sides
-- Arrows Up/Down   : Steer camera forward/backward
-- Mouse            : Rotate camera
+- Arrows Left/Right : Steers camera to the sides
+- Arrows Up/Down    : Steers camera forward/backward
+- Left Mouse Button : Mouse rotates camera
 "#,
                ));
                ui.separator();

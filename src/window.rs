@@ -50,44 +50,46 @@ impl Window {
           renderer: mut ui_renderer,
           ..
       } = self;
+
+      platform.handle_event::<()>(imgui.io_mut(), display.gl_window().window(), &Event::RedrawEventsCleared);
       let world_begin_time = Instant::now();
       let mut last_frame = world_begin_time;
 
       event_loop.run(move |event, _, control_flow| match event {
           Event::NewEvents(_) => {
-              let now = Instant::now();
-              let delta_time = now - last_frame;
-              imgui.io_mut().update_delta_time(delta_time);
-              last_frame = now;
+            let now = Instant::now();
+            let delta_time = now - last_frame;
+            imgui.io_mut().update_delta_time(delta_time);
+            last_frame = now;
           }
           Event::MainEventsCleared => {
-              let gl_window = display.gl_window();
-              platform
-                  .prepare_frame(imgui.io_mut(), gl_window.window())
-                  .expect("Failed to prepare frame");
-              gl_window.window().request_redraw();
+            let gl_window = display.gl_window();
+            platform
+               .prepare_frame(imgui.io_mut(), gl_window.window())
+               .expect("Failed to prepare frame");
+            gl_window.window().request_redraw();
           }
           Event::RedrawRequested(_) => {
-              let mut ui = imgui.frame();
+            let mut ui = imgui.frame();
+            let gl_window = display.gl_window();
+            platform.prepare_render(&ui, gl_window.window());
 
-              let gl_window = display.gl_window();
-              let mut target = display.draw();
-              target.clear_color_and_depth((0.05, 0.05, 0.05, 1.0), 1.0);
-         
-              let mut run = true;
-              user_action(&mut run, &mut ui, &display, &mut target);
-              if !run {
-                  *control_flow = ControlFlow::Exit;
-              }
+            let mut target = display.draw();
+            target.clear_color_and_depth((0.05, 0.05, 0.05, 1.0), 1.0);
 
-              // ui render
-              platform.prepare_render(&ui, gl_window.window());
-              let draw_data = ui.render();
-              ui_renderer
-                  .render(&mut target, draw_data)
-                  .expect("Rendering failed");
+            let mut run = true;
+            user_action(&mut run, &mut ui, &display, &mut target);
+            if !run {
+               *control_flow = ControlFlow::Exit;
+            }
 
-              target.finish().expect("Failed to swap buffers");
+            // ui render
+            let draw_data = ui.render();
+            ui_renderer
+               .render(&mut target, draw_data)
+               .expect("Rendering failed");
+
+            target.finish().expect("Failed to swap buffers");
           },
           Event::WindowEvent {event: WindowEvent::CloseRequested, ..} =>
             *control_flow = ControlFlow::Exit,
@@ -130,7 +132,7 @@ fn init_winit(display: &glium::Display, imgui: &mut imgui::Context) -> imgui_win
    let mut platform = imgui_winit_support::WinitPlatform::init(imgui);
    let gl_window = display.gl_window();
    let window = gl_window.window();
-   platform.attach_window(imgui.io_mut(), window, HiDpiMode::Rounded);
+   platform.attach_window(imgui.io_mut(), window, HiDpiMode::Default);
    platform
 }
 

@@ -48,6 +48,7 @@ pub struct WaterRenderer<'a> {
    mesh_grid_vertices: glium::VertexBuffer<crate::mesh_grid::Vertex>,
    mesh_grid_indices: glium::index::NoIndices,
    draw_parameters: DrawParametersVariant<'a>,
+   albedo_map: glium::Texture2d,
 }
 
 impl<'a> WaterRenderer<'a> {
@@ -56,11 +57,13 @@ impl<'a> WaterRenderer<'a> {
       let (mesh_grid_vertices, mesh_grid_indices)
          = crate::mesh_grid::make_tri_mesh(display, grid_size, cell_size);
       let draw_parameters = DrawParametersVariant::new();
+      let albedo_map = crate::mesh_grid::make_textures(display);
       Self {
          mesh_grid_program,
          mesh_grid_vertices,
          mesh_grid_indices,
          draw_parameters,
+         albedo_map,
       }
    }
 
@@ -79,8 +82,10 @@ impl<'a> WaterRenderer<'a> {
 impl<'a> Renderer for WaterRenderer<'a> {
    fn draw_to(&self, frame: &mut Frame, camera: &Camera) {
       use glium::Surface;
-      let uniforms = &uniform! {model_view_projection:
-         camera.get_view_projection().to_cols_array_2d()};
+      let uniforms = &uniform! {
+         model_view_projection: camera.get_view_projection().to_cols_array_2d(),
+         albedo_map: &self.albedo_map,
+      };
       frame.draw(
          &self.mesh_grid_vertices,
          &self.mesh_grid_indices,

@@ -1,13 +1,13 @@
 #version 330
 
-in vec2 v_position;
+precision highp float;
+
+uniform sampler2D albedo_map;
+
+in vec2 v_tex_coord;
 
 out vec4 o_color;
 
 void main() {
-   vec2 pos = v_position - 0.5;
-   float dist_squared = dot(pos, pos);
-   o_color = (dist_squared < 0.5)
-          ? vec4(0.0)
-          : vec4(vec3(1.0), 1.0);
+   o_color = texture(albedo_map, v_tex_coord);
 }

@@ -34,6 +34,15 @@ impl Camera {
       self
    }
 
+   pub fn look_forward(&mut self, unit_forward_direction: impl Into<glam::Vec3A>) -> &mut Self {
+      let forward = unit_forward_direction.into();
+      let right = glam::Vec3A::Y.cross(forward);
+      let up = forward.cross(right);
+      self.view_matrix.matrix3 = glam::mat3a(right, up, forward);
+      self.is_merged = false;
+      self
+   }
+
    pub fn perspective(&mut self, fov_y: f32, aspect_ratio: f32, z_near: f32, z_far: f32) -> &mut Self {
       self.projection_matrix = glam::Mat4::perspective_rh_gl(fov_y, aspect_ratio, z_near, z_far);
       self.is_merged = false;

@@ -1,4 +1,5 @@
 use glium::backend::glutin;
+use glium::uniforms::{Sampler, SamplerBehavior};
 use glium::{Frame, uniform, PolygonMode};
 use crate::camera::Camera;
 
@@ -24,7 +25,7 @@ impl<'a> DrawParametersVariant<'a> {
              write: true,
              .. Default::default()
          },
-         backface_culling: glium::BackfaceCullingMode::CullClockwise,
+         backface_culling: glium::BackfaceCullingMode::CullCounterClockwise,
          polygon_mode: PolygonMode::Line,
          line_width: Some(1.5),
          .. Default::default()
@@ -49,29 +50,39 @@ pub struct WaterRenderer<'a> {
    mesh_grid_indices: glium::index::NoIndices,
    draw_parameters: DrawParametersVariant<'a>,
    albedo_map: glium::Texture2d,
+   mesh_grid_model: glam::Affine3A,
 }
 
 impl<'a> WaterRenderer<'a> {
-   pub fn new(display: &glutin::Display, grid_size: (u32, u32), cell_size: f32) -> Self {
+   pub fn new(display: &glutin::Display, grid_size: (u32, u32), facet_size: f32) -> Self {
       let mesh_grid_program = crate::mesh_grid::make_program(display);
       let (mesh_grid_vertices, mesh_grid_indices)
-         = crate::mesh_grid::make_tri_mesh(display, grid_size, cell_size);
+         = crate::mesh_grid::make_tri_mesh(display, grid_size, facet_size);
       let draw_parameters = DrawParametersVariant::new();
       let albedo_map = crate::mesh_grid::make_textures(display);
+      let mesh_grid_model = glam::Affine3A::from_translation(
+         Self::get_grid_center(grid_size, facet_size).into());
       Self {
          mesh_grid_program,
          mesh_grid_vertices,
          mesh_grid_indices,
          draw_parameters,
          albedo_map,
+         mesh_grid_model,
       }
    }
 
-   pub fn recreate_mesh_grid(&mut self, display: &glutin::Display, grid_size: (u32, u32), cell_size: f32) {
+   pub fn recreate_mesh_grid(&mut self, display: &glutin::Display, grid_size: (u32, u32), facet_size: f32) {
       let (mesh_grid_vertices, mesh_grid_indices)
-         = crate::mesh_grid::make_tri_mesh(display, grid_size, cell_size);
+         = crate::mesh_grid::make_tri_mesh(display, grid_size, facet_size);
       self.mesh_grid_vertices = mesh_grid_vertices;
       self.mesh_grid_indices = mesh_grid_indices;
+      self.mesh_grid_model.translation = Self::get_grid_center(grid_size, facet_size);
+   }
+
+   pub fn get_grid_center(grid_size: (u32, u32), facet_size: f32) -> glam::Vec3A {
+      glam::vec3a(grid_size.0 as f32 * facet_size * -0.5,
+          0.0, grid_size.1 as f32 * facet_size * -0.5)
    }
 
    pub fn set_draw_mode(&mut self, draw_mode: DrawMode) {
@@ -82,9 +93,13 @@ impl<'a> WaterRenderer<'a> {
 impl<'a> Renderer for WaterRenderer<'a> {
    fn draw_to(&self, frame: &mut Frame, camera: &Camera) {
       use glium::Surface;
+      let albedo_map = Sampler::new(&self.albedo_map);
+      albedo_map.anisotropy(8);
+      albedo_map.minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapNearest);
+      albedo_map.magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear);
       let uniforms = &uniform! {
-         model_view_projection: camera.get_view_projection().to_cols_array_2d(),
-         albedo_map: &self.albedo_map,
+         model_view_projection: (*camera.view_projection() * self.mesh_grid_model).to_cols_array_2d(),
+         albedo_map: albedo_map,
       };
       frame.draw(
          &self.mesh_grid_vertices,

@@ -1,3 +1,6 @@
+// Creation of graphical window, handing of window/keyboard/mouse events
+// Creation of user interface (ImGUI)
+
 use glium::glutin;
 use glium::Surface;
 use glium::glutin::event::{Event, WindowEvent};
@@ -16,7 +19,7 @@ pub struct Window {
 }
 
 impl Window {
-   pub fn new(title: &str, (width, height): (u32, u32), imgui_ini_file: Option<PathBuf>) -> Self {
+   pub fn new(title: &str, (width, height): (u32, u32), font_size_pt: f64, imgui_ini_file: Option<PathBuf>) -> Self {
       let (display, event_loop) = make_display(title, width, height)
          .expect("Failed to create `glium::Display`");
 
@@ -25,7 +28,9 @@ impl Window {
 
       let platform = init_winit(&display, &mut imgui);
 
-      let font_size = init_fonts(&mut imgui, platform.hidpi_factor());
+      let font_size = init_fonts(&mut imgui,
+         font_size_pt,
+         platform.hidpi_factor());
 
       let renderer = imgui_glium_renderer::Renderer::init(&mut imgui, &display)
          .expect("Failed to initialize `imgui_glium_renderer::Renderer`");
@@ -35,8 +40,8 @@ impl Window {
       }
    }
 
-   pub fn aspect_ratio(&self) -> f32 {
-      let (width, height) = self.display.get_framebuffer_dimensions();
+   pub fn aspect_ratio(display: &glium::Display) -> f32 {
+      let (width, height) = display.get_framebuffer_dimensions();
       width as f32 / height as f32
    }
 
@@ -109,9 +114,10 @@ pub fn make_display(title: &str, width: u32, height: u32) -> DisplayCreationResu
    use glium::glutin::*;
 
    let window_builder = glutin::window::WindowBuilder::new()
-      .with_inner_size(glutin::dpi::LogicalSize::new(width, height))
+      .with_inner_size(glutin::dpi::PhysicalSize::new(width, height))
+      .with_position(glutin::dpi::PhysicalPosition::new(80, 20))
       .with_title(title.to_owned())
-      .with_resizable(true);
+      .with_resizable(false);
 
    let context_builder = ContextBuilder::new()
       .with_gl(GlRequest::Specific(Api::OpenGl, (3, 3)))
@@ -132,12 +138,13 @@ fn init_winit(display: &glium::Display, imgui: &mut imgui::Context) -> imgui_win
    let mut platform = imgui_winit_support::WinitPlatform::init(imgui);
    let gl_window = display.gl_window();
    let window = gl_window.window();
-   platform.attach_window(imgui.io_mut(), window, HiDpiMode::Default);
+   platform.attach_window(imgui.io_mut(), window, 
+   HiDpiMode::Default);
    platform
 }
 
-fn init_fonts(imgui: &mut imgui::Context, hidpi_factor: f64) -> f32 {
-   let font_size = (13.0 * hidpi_factor) as f32;
+fn init_fonts(imgui: &mut imgui::Context, font_size_pt: f64, hidpi_factor: f64) -> f32 {
+   let font_size = (font_size_pt * hidpi_factor) as f32;
    imgui.fonts().add_font(&[
       FontSource::DefaultFontData {
          config: Some(FontConfig {

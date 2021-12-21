@@ -11,8 +11,8 @@ glium::implement_vertex!(Vertex, position, tex_coord);
 pub fn make_tri_mesh(display: &glium::Display, size: (u32, u32), cell_size: f32) -> (glium::VertexBuffer<Vertex>, glium::index::NoIndices) {
    let (width, height) = size;
    let mut shape = Vec::<Vertex>::with_capacity ((width*height) as usize);
-   let tex_size_x = cell_size / (width as f32 * cell_size);
-   let tex_size_y = cell_size / (height as f32 * cell_size);
+   let tex_size_x = cell_size;
+   let tex_size_y = cell_size;
    let mut fy = 0.0;
    let mut tex_y = 0.0;
    for _ in 0..height {
@@ -25,8 +25,8 @@ pub fn make_tri_mesh(display: &glium::Display, size: (u32, u32), cell_size: f32)
          tex_x += tex_size_x;
       }
       // degenerate triangles
-      shape.push( Vertex { position: [(width as f32)*cell_size, fy + cell_size], tex_coord: [1.0, tex_y + tex_size_y] } );
-      shape.push( Vertex { position: [0.0, fy + cell_size], tex_coord: [0.0, tex_y + tex_size_y]} );
+      shape.push( Vertex { position: [(width as f32)*cell_size, fy + cell_size], tex_coord: [0.0, 0.0] } );
+      shape.push( Vertex { position: [0.0, fy + cell_size], tex_coord: [0.0, 0.0]} );
       fy += cell_size;
       tex_y += tex_size_y;
    }

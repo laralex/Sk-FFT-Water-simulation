@@ -1,3 +1,11 @@
+// Fragment shader program runs for every pixel on a rendered image
+
+// This particular shader takes texture coordinates (u, v) that are barycantrically
+// interpolated between 3 vertices of a triangle
+
+// Using those texture coordinates we get color value for this pixel
+// from a water texture (see ../textures folder)
+
 #version 330
 
 precision highp float;

@@ -3,14 +3,25 @@ use glium::uniforms::{Sampler, SamplerBehavior};
 use glium::{Frame, uniform, PolygonMode};
 use crate::camera::Camera;
 
+// All OpenGL rendering wrapped here
+// - water mesh
+// - debugging textures
+
+// Common interface
 pub trait Renderer {
    fn draw_to(&self, frame: &mut Frame, camera: &Camera);
 }
 
+// Mesh - fill triangles with texture
+// Wireframe - draw only lines
 #[derive(Copy, Clone, PartialEq)]
 pub enum DrawMode {
    Mesh, Wireframe
 }
+
+// ============
+// Switcheable settings
+// ============
 pub struct DrawParametersVariant<'a> {
    mesh_parameters: glium::DrawParameters<'a>,
    wireframe_parameters: glium::DrawParameters<'a>,
@@ -44,6 +55,10 @@ impl<'a> DrawParametersVariant<'a> {
       }
    }
 }
+
+// ============
+// Water mesh
+// ============
 pub struct WaterRenderer<'a> {
    mesh_grid_program: glium::Program,
    mesh_grid_vertices: glium::VertexBuffer<crate::mesh_grid::Vertex>,
@@ -108,5 +123,39 @@ impl<'a> Renderer for WaterRenderer<'a> {
          uniforms,
          self.draw_parameters.current_parameters(),
       ).unwrap()
+   }
+}
+
+// ============
+// Drawing debug textures
+// ============
+pub struct TextureBlitter<'a> {
+   texture: Option<&'a glium::Texture2d>,
+   blit_rectangle: glium::BlitTarget,
+}
+
+impl<'a> TextureBlitter<'a> {
+   pub fn new(left: u32, bottom: u32, width: u32, height: u32) -> Self {
+      Self {
+         blit_rectangle: glium::BlitTarget{
+            left, bottom,
+            width: width as i32, height: height as i32},
+         texture: None,
+      }
+   }
+
+   pub fn set_texture(&mut self, texture: Option<&'a glium::Texture2d>) {
+      self.texture = texture;
+   }
+}
+
+impl<'a> Renderer for TextureBlitter<'a> {
+   fn draw_to(&self, frame: &mut Frame, camera: &Camera) {
+      if let Some(texture) = self.texture {
+        use glium::Surface;
+        texture.as_surface().blit_whole_color_to(frame, &self.blit_rectangle,
+      glium::uniforms::MagnifySamplerFilter::Nearest);
+      }
+
    }
 }

@@ -31,11 +31,11 @@ fn main() {
    
          // setting up default simulation parameters
 
-   let mut fft_domain_size_idx = 0;
+   let mut fft_domain_size_idx = 4;
    let fft_domain_size_variants = vec![16, 32, 64, 128, 256, 512, 1024];
 
    let mut water_size = fft_domain_size_variants[fft_domain_size_idx];
-   let mut water_facet_size = 0.05;
+   let mut water_facet_size = 4.00;
    let center_x = water_size as f32 * 0.5;
    let water_center = glam::vec3a(center_x, center_x, 0.0);
    let mut water = render::WaterRenderer::new(
@@ -45,10 +45,11 @@ fn main() {
 
    let mut water_period_sec = 10.0;
    let mut height_field = height_field::HeightField::new(
-      &window.display, water_size as usize, water_period_sec);
+      &window.display, water_size as usize, 
+      water_facet_size * water_size as f32, water_period_sec);
 
    let mut camera = camera::Camera::default();
-   let default_camera_translation = glam::vec3a(0.0, -1.0, -1.0);
+   let default_camera_translation = glam::vec3a(0.0, -20.0, -1.0);
    let default_camera_direction = -glam::vec3a(1.0, 1.0, 1.0).normalize();
    camera
       .translate_to(default_camera_translation)
@@ -126,7 +127,7 @@ fn main() {
                         .look_at(default_camera_direction);
                   }
                   // ui.item_size([])
-                  imgui::Slider::new("Sensitivity", 0.5, 10.0)
+                  imgui::Slider::new("Sensitivity", 0.5, 30.0)
                      .build(&ui, &mut camera_steer_sensitivity);
 
                   ui.radio_button("Render textured", &mut draw_mode, DrawMode::Mesh);
@@ -145,9 +146,10 @@ fn main() {
 
                   if fft_domain_size_changed || facet_size_changed {
                      water_size = fft_domain_size_variants[fft_domain_size_idx];
-                     water_facet_size = water_facet_size.clamp(0.01, 1.0);
+                     //water_facet_size = water_facet_size.clamp(0.01, 1.0);
                      water.recreate_mesh_grid(display, (water_size, water_size), water_facet_size);
-                     height_field.regenerate_textures(display, water_size as usize);
+                     height_field.regenerate_textures(display, water_size as usize,
+                        water_facet_size * water_size as f32);
                   };
                   if water_period_changed {
                      height_field.set_period(water_period_sec);
@@ -169,8 +171,8 @@ fn main() {
          water.draw_to(frame, &camera);
          
          let (window_w, window_h) = display.get_framebuffer_dimensions();
-         let blit_width_px = 400;
-         let blit_offset_px = 0;
+         let blit_width_px = 200;
+         let blit_offset_px = 5;
          {
             let mut debug_texture_renderer = render::TextureBlitter::new(
                window_w-(blit_width_px+blit_offset_px), window_h-(blit_width_px+blit_offset_px),

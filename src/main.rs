@@ -61,15 +61,18 @@ fn main() {
    let mut draw_mode = DrawMode::Wireframe;
    let (mut yaw, mut pitch) = (-90.0, 0.0);
 
-   let mut show_precomputed_twiddle_texture: bool = false;
-   let mut show_precomputed_spectrum_textures: bool = false;
+   let mut show_precomputed_twiddle_texture: bool = true;
+   let mut show_precomputed_spectrum_textures: bool = true;
    let mut show_spectrum_realization_textures: bool = false;
-   let mut show_height_field_texture: bool = true;
+   let mut show_height_field_texture: bool = false;
+
+   let mut debug_textures_size = 200_f32;
+
+   let sys_time = SystemTime::now();
 
    window.run_loop(move |run, ui, display, frame| {
       let mut camera_steer = glam::Vec3A::ZERO;
       let frame_time_sec = ui.io().delta_time;
-      let sys_time = SystemTime::now();
 
       camera.with_perspective(
          f32::to_radians(consts::CAMERA_FIELD_OF_VIEW),
@@ -106,7 +109,7 @@ fn main() {
 
                let is_right_mouse = ui.is_mouse_dragging(MouseButton::Right);
                if is_right_mouse {
-                  camera_steer.y += ui.io().mouse_delta[1] * camera_steer_sensitivity / 5.0;
+                  camera_steer.y += ui.io().mouse_delta[1] * camera_orient_sensitivity * 5.0;
                }
                ui.text(format!(
                   "Usage:\n- Arrows L/R : Camera side-steer\n- Arrows U/D : Camera forward/back\n- Left Mouse Btn Drag: Camera rotation\n- Right Mouse Btn Drag: Camera up/down",
@@ -128,7 +131,8 @@ fn main() {
                   ui.checkbox("Show precomputed spectrum", &mut show_precomputed_spectrum_textures);
                   ui.checkbox("Show spectrum realization", &mut &mut show_spectrum_realization_textures);
                   ui.checkbox("Show height field", &mut &mut show_height_field_texture);
-
+                  imgui::Slider::new("Preview width (px)", 100.0, 300.0)
+                     .build(&ui, &mut debug_textures_size);
                }
 
                if CollapsingHeader::new("Camera").default_open(true).build(ui) {
@@ -178,13 +182,17 @@ fn main() {
             .translate(camera_steer*camera_steer_sensitivity*frame_time_sec)
             .look_forward(camera_direction);
 
-         height_field.compute_height_field_gpu(sys_time.elapsed().unwrap().as_secs_f32());
+         let total_time = sys_time
+            .elapsed().unwrap()
+            .as_secs_f32();
+
+         height_field.compute_height_field_gpu(total_time);
          
          water.set_draw_mode(draw_mode);
          water.draw_to(frame, &camera);
 
          let (window_w, window_h) = display.get_framebuffer_dimensions();
-         let blit_width_px = 200;
+         let blit_width_px = debug_textures_size as u32;
          let blit_offset_px = 5;
          let mut free_slot_x = 1;
          let mut free_slot_y = 0;

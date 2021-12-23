@@ -6,6 +6,8 @@ use crate::wave::Wind;
 use glium::texture::{RawImage2d, Texture2dDataSource};
 use glium::{Display, Texture2d, uniforms, };
 use glium::uniforms::{Sampler};
+use glium::GlObject;
+extern crate gl;
 
 type TextureResult<T> = Result<T, glium::texture::TextureCreationError>;
 pub struct HeightField {
@@ -108,17 +110,70 @@ impl HeightField {
    // (input textures with precomputed stationary spectrum,
    //  output textures for spectrum realization)
    pub fn compute_height_field_gpu(&self, time: f32) {
-      use glium::texture::Texture2dDataSource;
-      self.fft_compute_shader.execute(glium::uniform!{
-         // o_hkt_dx: self.spectrum_realization_dx.as_ref().unwrap(),
-         // o_hkt_dy: self.spectrum_realization_dy.as_ref().unwrap()),
-         // o_hkt_dz: self.spectrum_realization_dz.as_ref().unwrap()),
-         // i_h0k : self.base_spectrum.as_ref().unwrap()),
-         // i_h0_minus_k : self.base_spectrum_minus_k.as_ref().unwrap()),
-         u_PhysicalSize: self.physical_size,
-         u_BaseFrequency: self.base_frequency(),
-         u_Time: time,
-      }, (self.size / 16) as u32, (self.size / 16) as u32, 1);
+      unsafe {
+         if let glium::Handle::Id(id) = self.fft_compute_shader.get_id() {
+            gl::UseProgram(id);
+
+            let location = gl::GetUniformLocation(id, "o_hkt_dx".as_ptr() as *const i8);
+            // assert!(location != -1);
+            gl::Uniform1i(location, 0);
+            gl::BindImageTexture(0, self.spectrum_realization_dx.as_ref().unwrap().get_id(),
+               0, gl::FALSE, 0, gl::WRITE_ONLY, gl::RGBA32F);
+
+            let location = gl::GetUniformLocation(id, "o_hkt_dy".as_ptr() as *const i8);
+            // assert!(location != -1);
+            gl::Uniform1i(location, 1);
+            gl::BindImageTexture(1, self.spectrum_realization_dy.as_ref().unwrap().get_id(),
+               0, gl::FALSE, 0, gl::WRITE_ONLY, gl::RGBA32F);
+
+            let location = gl::GetUniformLocation(id, "o_hkt_dz".as_ptr() as *const i8);
+            // assert!(location != -1);
+            gl::Uniform1i(location, 2);
+            gl::BindImageTexture(2, self.spectrum_realization_dz.as_ref().unwrap().get_id(),
+               0, gl::FALSE, 0, gl::WRITE_ONLY, gl::RGBA32F);
+
+            let location = gl::GetUniformLocation(id, "i_h0k".as_ptr() as *const i8);
+            // assert!(location != -1);
+            gl::Uniform1i(location, 3);
+            gl::BindImageTexture(3, self.base_spectrum.as_ref().unwrap().get_id(),
+               0, gl::FALSE, 0, gl::READ_ONLY, gl::RGBA32F);
+
+            let location = gl::GetUniformLocation(id, "i_h0_minus_k".as_ptr() as *const i8);
+            // assert!(location != -1);
+            gl::Uniform1i(location, 4);
+            gl::BindImageTexture(4, self.base_spectrum_minus_k.as_ref().unwrap().get_id(),
+               0, gl::FALSE, 0, gl::READ_ONLY, gl::RGBA32F);
+
+            let location = gl::GetUniformLocation(id, "u_PhysicalSize".as_ptr() as *const i8);
+            // assert!(location != -1);
+            gl::Uniform1f(location, self.physical_size);
+
+            let location = gl::GetUniformLocation(id, "u_BaseFrequency".as_ptr() as *const i8);
+            // log::info!("loc {}", location);
+            // assert!(location != -1);
+            gl::Uniform1f(location, self.base_frequency());
+
+            let location = gl::GetUniformLocation(id, "u_Time".as_ptr() as *const i8);
+            // log::info!("loc {} {} ", self.base_frequency(), self.physical_size);
+            // assert!(location != -1);
+            gl::Uniform1f(location, time);
+
+            gl::DispatchCompute((self.size / 8) as u32, (self.size / 8) as u32, 1);
+            gl::MemoryBarrier(gl::SHADER_STORAGE_BARRIER_BIT);
+
+            gl::UseProgram(0);
+         }
+      }
+      // self.fft_compute_shader.execute(glium::uniform!{
+      //    // o_hkt_dx: self.spectrum_realization_dx.as_ref().unwrap(),
+      //    // o_hkt_dy: self.spectrum_realization_dy.as_ref().unwrap()),
+      //    // o_hkt_dz: self.spectrum_realization_dz.as_ref().unwrap()),
+      //    // i_h0k : self.base_spectrum.as_ref().unwrap()),
+      //    // i_h0_minus_k : self.base_spectrum_minus_k.as_ref().unwrap()),
+      //    u_PhysicalSize: self.physical_size,
+      //    u_BaseFrequency: self.base_frequency(),
+      //    u_Time: time,
+      // }, (self.size / 16) as u32, (self.size / 16) as u32, 1);
    }
 
    pub fn set_period(&mut self, period_sec: f32) {
@@ -222,8 +277,8 @@ impl HeightField {
    // those should be stored in way accessible by OpenGL.
    // The easiest - is a 2D texture, for each component
    fn make_base_spectrum(display: &glium::Display, size: usize, physical_size: f32, spectrum_amplitude: f32, wave_cutoff: f32, wind: &Wind) -> TextureResult<(Texture2d, Texture2d)> {
-      let mut spectrum_cpu = vec![vec![(0.00f32, 0.00f32); size]; size];
-      let mut spectrum_conjugate_cpu = vec![vec![(0.00f32, 0.00f32); size]; size];
+      let mut spectrum_cpu = vec![vec![(0.00f32, 0.00f32, 0.00f32, 0.00f32); size]; size];
+      let mut spectrum_conjugate_cpu = vec![vec![(0.00f32, 0.00f32, 0.00f32, 0.00f32,); size]; size];
 
       use rand::Rng;
       let mut rng = rand::thread_rng();
@@ -239,25 +294,25 @@ impl HeightField {
                let rnd_imag : f32 = rng.sample(rand_distr::StandardNormal);
                let entry = inv_sqrt2 * glam::vec2(rnd_real, rnd_imag) * phillips_sqrt;
                let entry = entry.clamp(glam::vec2(0.0, 0.0), glam::vec2(1000000.0, 1000000.0));
-               spectrum_cpu[row][col] = (entry.x, entry.y);
+               spectrum_cpu[row][col] = (entry.x, entry.y, 0.0, 1.0);
             }
             {
                let rnd_real : f32 = rng.sample(rand_distr::StandardNormal);
                let rnd_imag : f32 = rng.sample(rand_distr::StandardNormal);
                let entry = inv_sqrt2 * glam::vec2(rnd_real, rnd_imag) * phillips_sqrt;
                let entry = entry.clamp(glam::vec2(0.0, 0.0), glam::vec2(1000000.0, 1000000.0));
-               spectrum_conjugate_cpu[row][col] = (entry.x, entry.y);
+               spectrum_conjugate_cpu[row][col] = (entry.x, entry.y, 0.0, 1.0);
             }
          }
       }
       let spectrum = glium::Texture2d::with_format(display,
          spectrum_cpu,
-         glium::texture::UncompressedFloatFormat::F32F32,
+         glium::texture::UncompressedFloatFormat::F32F32F32F32,
          glium::texture::MipmapsOption::NoMipmap);
 
       let spectrum_conjugate = glium::Texture2d::with_format(display,
          spectrum_conjugate_cpu,
-         glium::texture::UncompressedFloatFormat::F32F32,
+         glium::texture::UncompressedFloatFormat::F32F32F32F32,
          glium::texture::MipmapsOption::NoMipmap);
 
       spectrum.and_then(|spectrum|
@@ -306,15 +361,15 @@ impl HeightField {
    // 3 dimensions is computed
    fn make_spectrum_realizations(display: &glium::Display, size: usize) -> TextureResult<(Texture2d, Texture2d, Texture2d)> {
       let dy = glium::Texture2d::empty_with_format(display,
-         glium::texture::UncompressedFloatFormat::F32F32,
+         glium::texture::UncompressedFloatFormat::F32F32F32F32,
          glium::texture::MipmapsOption::NoMipmap,
          size as u32, size as u32);
       let dx = glium::Texture2d::empty_with_format(display,
-         glium::texture::UncompressedFloatFormat::F32F32,
+         glium::texture::UncompressedFloatFormat::F32F32F32F32,
          glium::texture::MipmapsOption::NoMipmap,
          size as u32, size as u32);
       let dz = glium::Texture2d::empty_with_format(display,
-         glium::texture::UncompressedFloatFormat::F32F32,
+         glium::texture::UncompressedFloatFormat::F32F32F32F32,
          glium::texture::MipmapsOption::NoMipmap,
          size as u32, size as u32);
       dx.and_then(|dx|
@@ -340,7 +395,7 @@ impl HeightField {
       let small_wave_cutoff = f32::exp(
          -k_sqr * wave_cutoff * wave_cutoff);
 
-      amplitude * numerator * wind_dot_4 / k_4
+      amplitude * numerator * wind_dot_4 * small_wave_cutoff / k_4
    }
 }
 

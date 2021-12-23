@@ -10,13 +10,13 @@
 #define const_PI 3.14159265358979323846
 #define const_G 9.80665
 
-layout (local_size_x = 16, local_size_y = 16) in;
+layout (local_size_x = 8, local_size_y = 8) in;
 
-layout (binding = 0, rg32f) writeonly uniform image2D o_hkt_dx; // displacement x
-layout (binding = 1, rg32f) writeonly uniform image2D o_hkt_dy; // height y
-layout (binding = 2, rg32f) writeonly uniform image2D o_hkt_dz; // displacement z
-layout (binding = 3, rg32f) readonly uniform image2D i_h0k;
-layout (binding = 4, rg32f) readonly uniform image2D i_h0_minus_k;
+layout (binding = 0, rgba32f) writeonly uniform image2D o_hkt_dx; // displacement x
+layout (binding = 1, rgba32f) writeonly uniform image2D o_hkt_dy; // height y
+layout (binding = 2, rgba32f) writeonly uniform image2D o_hkt_dz; // displacement z
+layout (binding = 3, rgba32f) readonly uniform image2D i_h0k;
+layout (binding = 4, rgba32f) readonly uniform image2D i_h0_minus_k;
 
 uniform float u_PhysicalSize;
 uniform float u_Time;
@@ -59,7 +59,7 @@ void main(void) {
    vec2 h0_minus_k  = complex_conjugate(imageLoad(i_h0_minus_k, xy).xy);
 
    vec2 hkt_dy = complex_add(
-      complex_mul(h0k, e_iwt),
+      complex_mul(h0k, e_iwt) + sin(u_Time)*0.5,
       complex_mul(h0_minus_k, e_iwt_inv)
    );
 

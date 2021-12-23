@@ -1,6 +1,7 @@
 // Creation of graphical window, handing of window/keyboard/mouse events
 // Creation of user interface (ImGUI)
 
+use glium::backend::Facade;
 use glium::glutin;
 use glium::Surface;
 use glium::glutin::event::{Event, WindowEvent};
@@ -9,6 +10,7 @@ use imgui::{FontConfig, FontSource, Ui};
 use imgui_winit_support::{HiDpiMode};
 use std::path::PathBuf;
 use std::time::Instant;
+use gl;
 pub struct Window {
    pub event_loop: glutin::event_loop::EventLoop<()>,
    pub display: glium::Display,
@@ -122,15 +124,24 @@ pub fn make_display(title: &str, width: u32, height: u32) -> DisplayCreationResu
    let context_builder = ContextBuilder::new()
       .with_gl(GlRequest::Specific(Api::OpenGl, (4, 5)))
       .with_gl_profile(GlProfile::Core)
-      .with_gl_robustness(Robustness::TryRobustLoseContextOnReset)
+      .with_gl_robustness(Robustness::NoError)
       .with_pixel_format(8, 8)
       .with_depth_buffer(24)
-      .with_double_buffer(Some(true))
-      .with_vsync(true);
+      .with_double_buffer(Some(false))
+      .with_vsync(false);
 
    let event_loop = glutin::event_loop::EventLoop::new();
    let display = glium::Display::new(
       window_builder, context_builder, &event_loop)?;
+
+   // init opengl
+   extern crate gl;
+   use gl::types::*;
+   unsafe {
+      gl::load_with(|s| display.gl_window().context().get_proc_address(s) );
+      gl::Viewport::load_with(|s| display.gl_window().context().get_proc_address(s));
+   }
+
    Ok((display, event_loop))
 }
 

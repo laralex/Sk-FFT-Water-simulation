@@ -120,7 +120,7 @@ pub fn make_display(title: &str, width: u32, height: u32) -> DisplayCreationResu
       .with_resizable(false);
 
    let context_builder = ContextBuilder::new()
-      .with_gl(GlRequest::Specific(Api::OpenGl, (3, 3)))
+      .with_gl(GlRequest::Specific(Api::OpenGl, (4, 5)))
       .with_gl_profile(GlProfile::Core)
       .with_gl_robustness(Robustness::TryRobustLoseContextOnReset)
       .with_pixel_format(8, 8)

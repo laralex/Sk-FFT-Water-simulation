@@ -2,7 +2,7 @@
 // Setting up a window, logging library
 // Starting an infinite drawing loop
 
-use std::borrow::Cow;
+use std::{borrow::Cow, time::SystemTime};
 
 use imgui::{Key, MouseButton, CollapsingHeader};
 use render::{Renderer, DrawMode};
@@ -28,9 +28,9 @@ fn main() {
 
    let mut window = window::Window::new(
          consts::WINDOW_TITLE, (1600, 900), 13.0, None);
-   
-         // setting up default simulation parameters
-
+   assert!(glium::program::ComputeShader::is_supported(&window.display));
+         
+   // setting up default simulation parameters
    let mut fft_domain_size_idx = 4;
    let fft_domain_size_variants = vec![16, 32, 64, 128, 256, 512, 1024];
 
@@ -61,9 +61,15 @@ fn main() {
    let mut draw_mode = DrawMode::Wireframe;
    let (mut yaw, mut pitch) = (-90.0, 0.0);
 
+   let mut show_precomputed_twiddle_texture: bool = false;
+   let mut show_precomputed_spectrum_textures: bool = false;
+   let mut show_spectrum_realization_textures: bool = false;
+   let mut show_height_field_texture: bool = true;
+
    window.run_loop(move |run, ui, display, frame| {
       let mut camera_steer = glam::Vec3A::ZERO;
       let frame_time_sec = ui.io().delta_time;
+      let sys_time = SystemTime::now();
 
       camera.with_perspective(
          f32::to_radians(consts::CAMERA_FIELD_OF_VIEW),
@@ -100,13 +106,13 @@ fn main() {
 
                let is_right_mouse = ui.is_mouse_dragging(MouseButton::Right);
                if is_right_mouse {
-                  camera_steer.y += f32::clamp(ui.io().mouse_delta[1] * camera_orient_sensitivity, -1.0, 1.0);
+                  camera_steer.y += ui.io().mouse_delta[1] * camera_steer_sensitivity / 5.0;
                }
                ui.text(format!(
                   "Usage:\n- Arrows L/R : Camera side-steer\n- Arrows U/D : Camera forward/back\n- Left Mouse Btn Drag: Camera rotation\n- Right Mouse Btn Drag: Camera up/down",
                ));
 
-               if CollapsingHeader::new("Stats").build(ui) {
+               if CollapsingHeader::new("Debug").build(ui) {
                   ui.text(format!(
                      "{:.1} ms, {:.1} fps",
                      frame_time_sec*1000.0, 1.0/frame_time_sec
@@ -118,6 +124,11 @@ fn main() {
                      camera_pos.x, camera_pos.y, camera_pos.z,
                   ));
 
+                  ui.checkbox("Show precomputed twiddle", &mut show_precomputed_twiddle_texture);
+                  ui.checkbox("Show precomputed spectrum", &mut show_precomputed_spectrum_textures);
+                  ui.checkbox("Show spectrum realization", &mut &mut show_spectrum_realization_textures);
+                  ui.checkbox("Show height field", &mut &mut show_height_field_texture);
+
                }
 
                if CollapsingHeader::new("Camera").default_open(true).build(ui) {
@@ -127,7 +138,7 @@ fn main() {
                         .look_at(default_camera_direction);
                   }
                   // ui.item_size([])
-                  imgui::Slider::new("Sensitivity", 0.5, 30.0)
+                  imgui::Slider::new("Sensitivity", 1.0, 500.0)
                      .build(&ui, &mut camera_steer_sensitivity);
 
                   ui.radio_button("Render textured", &mut draw_mode, DrawMode::Mesh);
@@ -165,48 +176,90 @@ fn main() {
 
          camera
             .translate(camera_steer*camera_steer_sensitivity*frame_time_sec)
-            .look_forward(camera_direction)
-            ;
+            .look_forward(camera_direction);
+
+         height_field.compute_height_field_gpu(sys_time.elapsed().unwrap().as_secs_f32());
+         
          water.set_draw_mode(draw_mode);
          water.draw_to(frame, &camera);
-         
+
          let (window_w, window_h) = display.get_framebuffer_dimensions();
          let blit_width_px = 200;
          let blit_offset_px = 5;
-         {
-            let mut debug_texture_renderer = render::TextureBlitter::new(
-               window_w-(blit_width_px+blit_offset_px), window_h-(blit_width_px+blit_offset_px),
-              blit_width_px, blit_width_px);
-            debug_texture_renderer.set_texture(height_field.twiddle_indices_texture());
-            debug_texture_renderer.draw_to(frame, &camera);
-         }
-         {
-            let mut debug_texture_renderer = render::TextureBlitter::new(
-               window_w-(blit_width_px+blit_offset_px)*2, window_h-(blit_width_px+blit_offset_px),
+         let mut free_slot_x = 1;
+         let mut free_slot_y = 0;
+         if show_precomputed_twiddle_texture {
+            free_slot_y += 1;
+            let mut blitter = render::TextureBlitter::new(
+               window_w-(blit_width_px+blit_offset_px)*free_slot_x,
+               window_h-(blit_width_px+blit_offset_px)*free_slot_y,
                blit_width_px, blit_width_px);
-            debug_texture_renderer.set_texture(height_field.base_spectrum_normal());
-            debug_texture_renderer.draw_to(frame, &camera);
+            blitter.set_texture(height_field.twiddle_indices_texture());
+            blitter.draw_to(frame, &camera);
+            free_slot_x += 1;
          }
+         if show_precomputed_spectrum_textures
          {
-            let mut debug_texture_renderer = render::TextureBlitter::new(
-               window_w-(blit_width_px+blit_offset_px)*3, window_h-(blit_width_px+blit_offset_px),
+            if free_slot_y == 0 {
+                free_slot_y += 1;
+            }
+            let mut blitter = render::TextureBlitter::new(
+               window_w-(blit_width_px+blit_offset_px)*free_slot_x, 
+               window_h-(blit_width_px+blit_offset_px)*free_slot_y,
                blit_width_px, blit_width_px);
-            debug_texture_renderer.set_texture(height_field.base_spectrum_conjugate());
-            debug_texture_renderer.draw_to(frame, &camera);
+            blitter.set_texture(height_field.base_spectrum_normal());
+            blitter.draw_to(frame, &camera);
+            free_slot_x += 1;
+            let mut blitter = render::TextureBlitter::new(
+               window_w-(blit_width_px+blit_offset_px)*free_slot_x, 
+               window_h-(blit_width_px+blit_offset_px)*free_slot_y,
+               blit_width_px, blit_width_px);
+            blitter.set_texture(height_field.base_spectrum_conjugate());
+            blitter.draw_to(frame, &camera);
+            free_slot_x += 1;
          }
-         {
-            let mut debug_texture_renderer = render::TextureBlitter::new(
-               window_w-(blit_width_px+blit_offset_px), window_h-(blit_width_px+blit_offset_px)*2,
+         if show_spectrum_realization_textures {
+            free_slot_x = 1;
+            free_slot_y += 1;
+            let mut blitter = render::TextureBlitter::new(
+               window_w-(blit_width_px+blit_offset_px)*free_slot_x, 
+               window_h-(blit_width_px+blit_offset_px)*free_slot_y,
                blit_width_px, blit_width_px);
-            debug_texture_renderer.set_texture(height_field.current_height_field());
-            debug_texture_renderer.draw_to(frame, &camera);
+            blitter.set_texture(height_field.spectrum_realization_dx());
+            blitter.draw_to(frame, &camera);
+            free_slot_x += 1;
+            let mut blitter = render::TextureBlitter::new(
+               window_w-(blit_width_px+blit_offset_px)*free_slot_x, 
+               window_h-(blit_width_px+blit_offset_px)*free_slot_y,
+               blit_width_px, blit_width_px);
+            blitter.set_texture(height_field.spectrum_realization_dy());
+            blitter.draw_to(frame, &camera);
+            free_slot_x += 1;
+            let mut blitter = render::TextureBlitter::new(
+               window_w-(blit_width_px+blit_offset_px)*free_slot_x, 
+               window_h-(blit_width_px+blit_offset_px)*free_slot_y,
+               blit_width_px, blit_width_px);
+            blitter.set_texture(height_field.spectrum_realization_dz());
+            blitter.draw_to(frame, &camera);
+            free_slot_x += 1;
          }
-         {
-            let mut debug_texture_renderer = render::TextureBlitter::new(
-               window_w-(blit_width_px+blit_offset_px)*2, window_h-(blit_width_px+blit_offset_px)*2,
+         if show_height_field_texture {
+            free_slot_x = 1;
+            free_slot_y += 1;
+            let mut blitter = render::TextureBlitter::new(
+               window_w-(blit_width_px+blit_offset_px)*free_slot_x, 
+               window_h-(blit_width_px+blit_offset_px)*free_slot_y,
                blit_width_px, blit_width_px);
-            debug_texture_renderer.set_texture(height_field.previous_height_field());
-            debug_texture_renderer.draw_to(frame, &camera);
+            blitter.set_texture(height_field.current_height_field());
+            blitter.draw_to(frame, &camera);
+            free_slot_x += 1;
+            let mut blitter = render::TextureBlitter::new(
+               window_w-(blit_width_px+blit_offset_px)*free_slot_x, 
+               window_h-(blit_width_px+blit_offset_px)*free_slot_y,
+               blit_width_px, blit_width_px);
+            blitter.set_texture(height_field.previous_height_field());
+            blitter.draw_to(frame, &camera);
+            free_slot_x += 1;
          }
    });
 }

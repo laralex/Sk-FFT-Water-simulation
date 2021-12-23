@@ -34,4 +34,17 @@ macro_rules! make_program {
    }
 }
 
+#[macro_export]
+macro_rules! make_compute_shader {
+   (
+      $display: expr,
+      $shader_file: literal
+   ) => {
+      glium::program::ComputeShader::from_source($display,
+         include_str!($shader_file),
+      ).expect("Failed to compile OpenGL compute shader")
+   };
+}
+
 pub(crate) use make_program;
+pub(crate) use make_compute_shader;

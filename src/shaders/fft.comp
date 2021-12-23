@@ -1,0 +1,79 @@
+// This compute shader takes as input i_h0k and i_h0_minus_k
+// which are precomputed and store stationary spectrum of waves
+// from them it's known how to get a realization of the spectrum at moment t
+// h(k,t) = h0(k)exp{iwt} + h0*(-k)exp{-iwt}
+// Complex exponents can be found from Euler's equation
+// Besides, in this shader we also compute spectrum of displacement along X and Z
+// This will make motion of ocean better, as vertices won't only move in vertical direction
+
+#version 430 core
+#define const_PI 3.14159265358979323846
+#define const_G 9.80665
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+layout (binding = 0, rg32f) writeonly uniform image2D o_hkt_dx; // displacement x
+layout (binding = 1, rg32f) writeonly uniform image2D o_hkt_dy; // height y
+layout (binding = 2, rg32f) writeonly uniform image2D o_hkt_dz; // displacement z
+layout (binding = 3, rg32f) readonly uniform image2D i_h0k;
+layout (binding = 4, rg32f) readonly uniform image2D i_h0_minus_k;
+
+uniform float u_PhysicalSize;
+uniform float u_Time;
+uniform float u_BaseFrequency;
+
+
+vec2 complex_mul(vec2 a, vec2 b) {
+   return vec2(a.x*b.x - a.y*b.y, a.x*b.y + a.y*b.x);
+}
+
+vec2 complex_add(vec2 a, vec2 b) {
+   return a + b;
+}
+
+vec2 complex_conjugate(vec2 c) {
+   return vec2(c.x, -c.y);
+}
+
+float get_wavevector_freq(float wavevector_mag) {
+   return int(sqrt(const_G * wavevector_mag) / u_BaseFrequency)*u_BaseFrequency;
+}
+
+void main(void) {
+   ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+   vec2 xyf = vec2(xy);
+   vec2 wavevector = 2.0*const_PI/u_PhysicalSize * xy;
+
+   float wavevector_mag = length(wavevector);
+   wavevector_mag = max(wavevector_mag, 0.0001);
+
+   float w = get_wavevector_freq(wavevector_mag);
+   float cos_w = cos(w*u_Time);
+   float sin_w = sin(w*u_Time);
+
+   // Euler's formula
+   vec2 e_iwt = vec2(cos_w, sin_w);
+   vec2 e_iwt_inv = vec2(cos_w, -sin_w);
+
+   vec2 h0k         = imageLoad(i_h0k, xy).xy;
+   vec2 h0_minus_k  = complex_conjugate(imageLoad(i_h0_minus_k, xy).xy);
+
+   vec2 hkt_dy = complex_add(
+      complex_mul(h0k, e_iwt),
+      complex_mul(h0_minus_k, e_iwt_inv)
+   );
+
+   vec2 hkt_dx = complex_mul(
+      vec2(0.0, -wavevector.x/wavevector_mag),
+      hkt_dy
+   );
+
+   vec2 hkt_dz = complex_mul(
+      vec2(0.0, -wavevector.y/wavevector_mag),
+      hkt_dy
+   );
+
+   imageStore(o_hkt_dy, xy, vec4(hkt_dy, 0.0, 1.0));
+   imageStore(o_hkt_dx, xy, vec4(hkt_dx, 0.0, 1.0));
+   imageStore(o_hkt_dz, xy, vec4(hkt_dz, 0.0, 1.0));
+}

@@ -1,16 +1,18 @@
 // HeightField - encapsulation of FFT-based algorithm for 
 // water height field generation at moment t
 
-use crate::consts;
+use crate::{consts, make_compute_shader};
 use crate::wave::Wind;
-use glium::{Display, Texture2d};
+use glium::texture::{RawImage2d, Texture2dDataSource};
+use glium::{Display, Texture2d, uniforms, };
+use glium::uniforms::{Sampler};
 
 type TextureResult<T> = Result<T, glium::texture::TextureCreationError>;
-
 pub struct HeightField {
    // size of computing domain on GPU
    // has to be a power of 2 (preferably below 2048)
    size: usize,
+   physical_size: f32, // meters
 
    // waves with smaller length will be discarded (to improve convergence)
    length_cutoff_meters: f32,
@@ -27,8 +29,13 @@ pub struct HeightField {
    // initial stationary 2D spectrum of height field, that doesn't depend on time
    // one w.r.t. wave magnitude and other is complex conjugate w.r.t. negative wave magnitude
    base_spectrum: Option<Texture2d>,
-   base_spectrum_neg_arg: Option<Texture2d>,
+   base_spectrum_minus_k: Option<Texture2d>,
    spectrum_amplitude: f32,
+
+   // spectrum at time t (defines displacement in all 3 dimensions)
+   spectrum_realization_dx: Option<Texture2d>,
+   spectrum_realization_dy: Option<Texture2d>,
+   spectrum_realization_dz: Option<Texture2d>,
 
    // to compute FFT in OpenGL, we'll have to compute logN levels
    // of butterfly algorithm, for this we use "ping-pong" approach,
@@ -38,12 +45,16 @@ pub struct HeightField {
    height_field_current: Option<Texture2d>,
    height_field_previous: Option<Texture2d>,
 
+   // OpenGL GPU program to combine precomputed maps, and 
+   // find height field for the current frame
+   fft_compute_shader: glium::program::ComputeShader,
 }
 
 impl HeightField {
    pub fn new(display: &Display, lattice_size: usize, physical_size: f32, period_sec: f32) -> Self {
       let mut instance = Self {
          size: lattice_size,
+         physical_size,
          length_cutoff_meters: consts::WAVELENGTH_CUTOFF_METERS,
          spectrum_amplitude: consts::PHILLIPS_SPECTRUM_AMPLITUDE,
          period_sec,
@@ -51,9 +62,13 @@ impl HeightField {
             glam::vec2(consts::WIND_DIRECTION_X, consts::WIND_DIRECTION_Y)),
          twiddle_indices: None,
          base_spectrum: None,
-         base_spectrum_neg_arg: None,
+         base_spectrum_minus_k: None,
+         spectrum_realization_dx: None,
+         spectrum_realization_dy: None,
+         spectrum_realization_dz: None,
          height_field_current: None,
          height_field_previous: None,
+         fft_compute_shader: make_compute_shader!(display, "shaders/fft.comp"),
       };
       instance.regenerate_textures(display, lattice_size, physical_size);
       instance
@@ -61,15 +76,23 @@ impl HeightField {
 
    pub fn regenerate_textures(&mut self, display: &Display, size: usize, physical_size: f32) {
       self.size = size;
+      self.physical_size = physical_size;
       let twiddle_indices = Self::make_twiddle_indices(display, self.size)
          .expect("Couldn't generate texture for FFT twiddle indices");
       self.twiddle_indices = twiddle_indices.into();
-      let (spectrum, spectrum_conj) = Self::make_base_spectrum(
+      let (base_spectrum, base_spectrum_minus_k) = Self::make_base_spectrum(
          display, self.size, physical_size, self.spectrum_amplitude,
          self.length_cutoff_meters, &self.wind)
          .expect("Couldn't generate two textures of FFT base spectum");
-      self.base_spectrum = Some(spectrum);
-      self.base_spectrum_neg_arg = Some(spectrum_conj);
+      self.base_spectrum = Some(base_spectrum);
+      self.base_spectrum_minus_k = Some(base_spectrum_minus_k);
+
+      let (spectrum_dx, spectrum_dy, spectrum_dz) = Self::make_spectrum_realizations(display, self.size)
+         .expect("Couldn't generate three textures of spectrum time realization");
+
+      self.spectrum_realization_dx = Some(spectrum_dx);
+      self.spectrum_realization_dy = Some(spectrum_dy);
+      self.spectrum_realization_dz = Some(spectrum_dz);
 
       // let noise_map = Self::make_noise_map(display, self.size)
       //    .expect("Couldn't generate texture with Standard Normal random values");
@@ -79,6 +102,23 @@ impl HeightField {
       .expect("Couldn't generate empty textures for height field");
       self.height_field_current = Some(field_current);
       self.height_field_previous = Some(field_previous);
+   }
+
+   // Launch "fft.comp" GPU program, pass input data 
+   // (input textures with precomputed stationary spectrum,
+   //  output textures for spectrum realization)
+   pub fn compute_height_field_gpu(&self, time: f32) {
+      use glium::texture::Texture2dDataSource;
+      self.fft_compute_shader.execute(glium::uniform!{
+         // o_hkt_dx: self.spectrum_realization_dx.as_ref().unwrap(),
+         // o_hkt_dy: self.spectrum_realization_dy.as_ref().unwrap()),
+         // o_hkt_dz: self.spectrum_realization_dz.as_ref().unwrap()),
+         // i_h0k : self.base_spectrum.as_ref().unwrap()),
+         // i_h0_minus_k : self.base_spectrum_minus_k.as_ref().unwrap()),
+         u_PhysicalSize: self.physical_size,
+         u_BaseFrequency: self.base_frequency(),
+         u_Time: time,
+      }, (self.size / 16) as u32, (self.size / 16) as u32, 1);
    }
 
    pub fn set_period(&mut self, period_sec: f32) {
@@ -94,7 +134,7 @@ impl HeightField {
    }
 
    pub fn base_spectrum_conjugate(&self) -> Option<&glium::Texture2d> {
-      self.base_spectrum_neg_arg.as_ref()
+      self.base_spectrum_minus_k.as_ref()
    }
 
    pub fn current_height_field(&self) -> Option<&glium::Texture2d> {
@@ -103,6 +143,18 @@ impl HeightField {
 
    pub fn previous_height_field(&self) -> Option<&glium::Texture2d> {
       self.height_field_previous.as_ref()
+   }
+
+   pub fn spectrum_realization_dx(&self) -> Option<&glium::Texture2d> {
+      self.spectrum_realization_dx.as_ref()
+   }
+
+   pub fn spectrum_realization_dy(&self) -> Option<&glium::Texture2d> {
+      self.spectrum_realization_dy.as_ref()
+   }
+
+   pub fn spectrum_realization_dz(&self) -> Option<&glium::Texture2d> {
+      self.spectrum_realization_dz.as_ref()
    }
 
    // To make simulation periodic, we need to make all subwaves frequencies
@@ -247,6 +299,28 @@ impl HeightField {
       f0.and_then(|f0|
          f1.and_then(|f1|
             Ok((f0, f1))))
+   }
+
+   // Create empty textures, where spectrum at moment t will be computed (on GPU)
+   // The "fft.comp" shader file defines how displacement of vertices in all
+   // 3 dimensions is computed
+   fn make_spectrum_realizations(display: &glium::Display, size: usize) -> TextureResult<(Texture2d, Texture2d, Texture2d)> {
+      let dy = glium::Texture2d::empty_with_format(display,
+         glium::texture::UncompressedFloatFormat::F32F32,
+         glium::texture::MipmapsOption::NoMipmap,
+         size as u32, size as u32);
+      let dx = glium::Texture2d::empty_with_format(display,
+         glium::texture::UncompressedFloatFormat::F32F32,
+         glium::texture::MipmapsOption::NoMipmap,
+         size as u32, size as u32);
+      let dz = glium::Texture2d::empty_with_format(display,
+         glium::texture::UncompressedFloatFormat::F32F32,
+         glium::texture::MipmapsOption::NoMipmap,
+         size as u32, size as u32);
+      dx.and_then(|dx|
+         dy.and_then(|dy|
+            dz.and_then(|dz|
+            Ok((dx, dy, dz)))))
    }
 
    // The most typical spectrum of oceanic waves, has many researched extensions

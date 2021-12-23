@@ -60,7 +60,7 @@ impl<'a> DrawParametersVariant<'a> {
 // Water mesh
 // ============
 pub struct WaterRenderer<'a> {
-   mesh_grid_program: glium::Program,
+   mesh_grid_shader: glium::Program,
    mesh_grid_vertices: glium::VertexBuffer<crate::mesh_grid::Vertex>,
    mesh_grid_indices: glium::index::NoIndices,
    draw_parameters: DrawParametersVariant<'a>,
@@ -78,7 +78,7 @@ impl<'a> WaterRenderer<'a> {
       let mesh_grid_model = glam::Affine3A::from_translation(
          Self::get_grid_center(grid_size, facet_size).into());
       Self {
-         mesh_grid_program,
+         mesh_grid_shader: mesh_grid_program,
          mesh_grid_vertices,
          mesh_grid_indices,
          draw_parameters,
@@ -119,7 +119,7 @@ impl<'a> Renderer for WaterRenderer<'a> {
       frame.draw(
          &self.mesh_grid_vertices,
          &self.mesh_grid_indices,
-         &self.mesh_grid_program,
+         &self.mesh_grid_shader,
          uniforms,
          self.draw_parameters.current_parameters(),
       ).unwrap()
@@ -156,6 +156,5 @@ impl<'a> Renderer for TextureBlitter<'a> {
         texture.as_surface().blit_whole_color_to(frame, &self.blit_rectangle,
       glium::uniforms::MagnifySamplerFilter::Nearest);
       }
-
    }
 }
